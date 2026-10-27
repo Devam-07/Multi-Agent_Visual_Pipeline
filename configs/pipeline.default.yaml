@@ -1,0 +1,42 @@
+# Tunable pipeline constants. Every key here maps to a field in formsync.config.PipelineConfig;
+# unknown keys are rejected at load time so typos fail fast. Omitted keys use the code defaults.
+
+pose:
+  model_name: yolo11s-pose      # yolo11n-pose for tests / quick runs, yolo11m-pose for accuracy
+  imgsz: 1600                   # inference size on the stage ROI; 35 dancers in 1080p need >= 1280
+  target_fps: 15.0              # frames analysed per second (source frames are strided to hit this)
+  conf: 0.25
+  iou: 0.6
+  max_det: 80
+  tracker_config: configs/bytetrack_dance.yaml
+  keypoint_conf_min: 0.3        # keypoints below this confidence become NaN before smoothing
+  max_gap_frames: 5             # NaN gaps up to this length are linearly interpolated
+  smooth_window: 7              # Savitzky-Golay window (frames), must be odd
+  smooth_poly: 2
+
+sync:
+  window_s: 2.0                 # sliding window length for offset estimation (~4 beats at 120 bpm)
+  hop_s: 0.5
+  max_lag_s: 0.5                # search range for timing offsets, +/- seconds
+  min_corr: 0.3                 # windows with peak correlation below this are marked invalid
+  min_visible_frac: 0.6
+  late_threshold_beats: 0.25    # |offset| above this counts toward late/early fractions
+  timing_scale_beats: 0.30      # spread at which the timing component drops to ~0.37
+  amp_scale_log: 0.35
+  timing_weight: 0.7            # weight of timing vs amplitude in the section score
+
+formation:
+  transition_speed_mps: 0.35    # group median speed above this (for transition_min_s) starts a transition
+  transition_min_s: 0.3
+  hold_speed_mps: 0.15          # group median speed below this (for hold_min_s) starts a hold
+  hold_min_s: 0.5
+  settle_min_s: 0.4             # per-dancer: speed below hold_speed for this long = settled
+  ankle_conf_min: 0.5           # both ankles above this -> ankle midpoint is the floor point
+  spacing_scale_m: 0.5
+  timing_scale_beats: 1.0
+  nn_cv_scale: 0.3
+
+audio:
+  sample_rate: 22050
+  tempo_min_bpm: 80             # beat tracker output is clamped into this range (half/double-tempo guard)
+  tempo_max_bpm: 160

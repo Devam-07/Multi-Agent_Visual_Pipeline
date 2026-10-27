@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Secrets and local state
+.env
+*.db
+*.sqlite
+
+# Pipeline outputs and large files
+runs/
+*.mp4
+*.mov
+*.wav
+*.pt
+*.onnx
+*_openvino_model/
+tests/fixtures/*.mp4
+
+# Node (frontend, later phase)
+node_modules/
