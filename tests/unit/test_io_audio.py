@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from formsync.io.audio import (
     AudioExtractionError,
+    NoAudioStreamError,
     extract_audio,
     ffmpeg_path,
     load_audio,
@@ -52,7 +55,7 @@ def test_extract_audio_from_synthetic_video(tmp_path: Path) -> None:
 def test_extract_audio_without_audio_stream_raises(tmp_path: Path) -> None:
     """A silent clip (no audio stream) raises AudioExtractionError; missing file raises."""
     clip = make_synthetic_video(tmp_path / "silent.mp4", n_frames=10, fps=30)
-    with pytest.raises(AudioExtractionError):
+    with pytest.raises(NoAudioStreamError):
         extract_audio(clip, tmp_path / "silent.wav")
     with pytest.raises(FileNotFoundError):
         extract_audio(tmp_path / "missing.mp4", tmp_path / "x.wav")
@@ -65,3 +68,17 @@ def test_click_track_has_clicks_on_beats() -> None:
     assert y.shape == (2 * sr,)
     assert np.abs(y[: int(0.03 * sr)]).max() > 0.5
     assert np.abs(y[int(0.1 * sr) : int(0.4 * sr)]).max() == 0.0
+
+
+@pytest.mark.parametrize("detail", ["decoder failed", "Permission denied", ""])
+def test_audio_errors_do_not_imply_absent_stream(tmp_path: Path, detail: str) -> None:
+    """Only an explicit unmatched stream map identifies a silent input."""
+    clip = tmp_path / "source.mp4"
+    clip.write_bytes(b"placeholder")
+    result = CompletedProcess([], 1, stdout="", stderr=detail)
+    with (
+        patch("formsync.io.audio.subprocess.run", return_value=result),
+        pytest.raises(AudioExtractionError) as raised,
+    ):
+        extract_audio(clip, tmp_path / "audio.wav")
+    assert not isinstance(raised.value, NoAudioStreamError)

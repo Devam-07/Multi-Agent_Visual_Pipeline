@@ -19,6 +19,10 @@ class AudioExtractionError(RuntimeError):
     """Raised when ffmpeg cannot extract an audio track (e.g. the video has none)."""
 
 
+class NoAudioStreamError(AudioExtractionError):
+    """Raised only when ffmpeg explicitly reports no matching audio stream."""
+
+
 def ffmpeg_path() -> str:
     """Return the path of the bundled ffmpeg executable.
 
@@ -41,7 +45,8 @@ def extract_audio(video_path: Path | str, wav_path: Path | str, sample_rate: int
 
     Raises:
         FileNotFoundError: If the video does not exist.
-        AudioExtractionError: If ffmpeg fails, typically because there is no audio stream.
+        NoAudioStreamError: If the input has no audio stream.
+        AudioExtractionError: If ffmpeg fails to decode or write audio.
     """
     src = Path(video_path)
     if not src.exists():
@@ -55,6 +60,8 @@ def extract_audio(video_path: Path | str, wav_path: Path | str, sample_rate: int
         "error",
         "-i",
         str(src),
+        "-map",
+        "0:a:0",  # explicitly distinguish absent audio from decoding/output failures
         "-vn",  # drop video
         "-ac",
         "1",  # mono
@@ -67,6 +74,8 @@ def extract_audio(video_path: Path | str, wav_path: Path | str, sample_rate: int
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0 or not out.exists() or out.stat().st_size == 0:
         detail = result.stderr.strip() or "no audio stream"
+        if "matches no streams" in detail:
+            raise NoAudioStreamError(f"No audio stream in {src}")
         raise AudioExtractionError(f"ffmpeg could not extract audio from {src}: {detail}")
     return out
 

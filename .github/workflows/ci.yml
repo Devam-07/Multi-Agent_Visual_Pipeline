@@ -25,3 +25,5 @@ jobs:
         run: uv run interrogate
       - name: Unit tests
         run: uv run pytest
+      - name: ByteTrack integration (no model download)
+        run: uv run pytest -m slow tests/integration/test_bytetrack_pipeline.py
