@@ -27,8 +27,8 @@ formation → agents`, with shared Pydantic models in `schemas/`.
 ## Project status
 
 Phase 1 (local CLI: CV core, sync/formation scoring, single feedback agent) is in progress.
-Foundation, ingestion, synthetic pose datasets, replay, and ByteTrack tracking are implemented.
-Pose inference, smoothing, beat extraction,
+Foundation, ingestion, synthetic pose datasets, replay, ByteTrack tracking, and CPU YOLO pose
+inference with inspection overlays are implemented. Smoothing, beat extraction,
 scoring, and feedback generation remain upcoming slices.
 Later phases: multi-agent rubric scoring, human-labelled eval harness, FastAPI + React dashboard,
 Kubernetes batch jobs with MinIO/S3 storage, staging visualization.
@@ -106,6 +106,35 @@ Evaluation is a separate operation using the original synthetic dataset. It repo
 identity switches, extra tracks per dancer, mixed identities, assigned coverage, and
 global assignment accuracy. These are fixture diagnostics, not real-video accuracy.
 See [the tracking contract and test-first evidence](docs/slice-3-tracking.md).
+
+## Run YOLO Pose on a video
+
+First ingest your video, then use the manifest path printed by ingestion:
+
+```powershell
+uv run formsync ingest practice.mp4 --output runs/
+uv run formsync poses runs/<run-id>/manifest.json --output runs/pose-results/
+uv run formsync replay runs/pose-results/stream.json
+```
+
+The new output directory contains `detections.parquet`, `tracks.parquet`, `stream.json`,
+`overlay.mp4`, and `poses.json`. The overlay shows boxes, confident skeleton joints, and
+raw track IDs. It is silent and runs at the sampled analysis rate. `poses.json` records
+the outcome, model/settings, runtime, and mapping to source frame indices.
+
+The default model is YOLO11s Pose on CPU; official weights may download on first use.
+Use `--pipeline custom.yaml` to choose a smaller model or local weights and adjust
+inference resolution. For example:
+
+```yaml
+pose:
+  model_name: runs/yolo-assets/yolo11n-pose.pt
+  imgsz: 640
+  target_fps: 15
+```
+
+This performs pose detection and raw tracking, not dance scoring. See
+[the YOLO integration contract](docs/slice-4-yolo.md) for timing, test evidence, and limits.
 
 ## Development
 

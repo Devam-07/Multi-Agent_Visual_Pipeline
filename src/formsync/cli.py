@@ -186,5 +186,35 @@ def evaluate_tracks(
     console.print_json(json.dumps(metrics))
 
 
+@app.command()
+def poses(
+    manifest: Annotated[Path, typer.Argument(help="Successful ingestion manifest.json.")],
+    output: Annotated[Path, typer.Option(help="New directory for poses, tracks and overlay.")],
+    pipeline: Annotated[Path | None, typer.Option(help="Pipeline YAML settings.")] = None,
+) -> None:
+    """Run pretrained YOLO Pose and ByteTrack on CPU and save an inspection video.
+
+    Official weights may download on first use. Use pose.model_name in a pipeline
+    YAML to select cached/local weights. Existing output directories are refused.
+    """
+    from formsync.config import REPO_ROOT
+    from formsync.pose.inference import run_poses
+    from formsync.schemas.tracking import TrackerConfig
+
+    try:
+        cfg = load_pipeline_config(pipeline or get_settings().pipeline_config)
+        tracker_path = cfg.pose.tracker_config
+        if not tracker_path.is_absolute():
+            tracker_path = REPO_ROOT / tracker_path
+        tracker = TrackerConfig.model_validate(
+            yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+        )
+        result = run_poses(manifest, output, cfg, tracker)
+    except (OSError, ValueError, RuntimeError, ImportError, yaml.YAMLError) as exc:
+        console.print(f"Unable to process poses: {exc}", markup=False)
+        raise typer.Exit(code=1) from exc
+    console.print(f"Pose analysis complete: {result}", markup=False)
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
