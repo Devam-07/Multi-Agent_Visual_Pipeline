@@ -216,5 +216,35 @@ def poses(
     console.print(f"Pose analysis complete: {result}", markup=False)
 
 
+@app.command()
+def clean(
+    manifest: Annotated[Path, typer.Argument(help="Successful poses.json or tracking.json.")],
+    output: Annotated[Path, typer.Option(help="New directory for cleaned trajectories.")],
+    pipeline: Annotated[
+        Path | None, typer.Option(help="Pipeline YAML with cleanup settings.")
+    ] = None,
+) -> None:
+    """Filter, interpolate and smooth each raw track, saving quality and processing flags.
+
+    Uses pose.keypoint_conf_min, max_gap_frames, smooth_window and smooth_poly from
+    pipeline settings. Does not merge track identities or modify source measurements.
+    """
+    from formsync.pose.cleanup import CleanupConfig, clean_dataset
+
+    try:
+        pose = load_pipeline_config(pipeline or get_settings().pipeline_config).pose
+        cfg = CleanupConfig(
+            confidence=pose.keypoint_conf_min,
+            max_gap_frames=pose.max_gap_frames,
+            smooth_window=pose.smooth_window,
+            smooth_poly=pose.smooth_poly,
+        )
+        result = clean_dataset(manifest, output, cfg)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        console.print(f"Unable to clean trajectories: {exc}", markup=False)
+        raise typer.Exit(code=1) from exc
+    console.print(f"Cleanup complete: {result}", markup=False)
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()

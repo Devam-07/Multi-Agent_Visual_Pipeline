@@ -28,7 +28,7 @@ formation → agents`, with shared Pydantic models in `schemas/`.
 
 Phase 1 (local CLI: CV core, sync/formation scoring, single feedback agent) is in progress.
 Foundation, ingestion, synthetic pose datasets, replay, ByteTrack tracking, and CPU YOLO pose
-inference with inspection overlays are implemented. Smoothing, beat extraction,
+inference with inspection overlays and per-track trajectory cleanup are implemented. Beat extraction,
 scoring, and feedback generation remain upcoming slices.
 Later phases: multi-agent rubric scoring, human-labelled eval harness, FastAPI + React dashboard,
 Kubernetes batch jobs with MinIO/S3 storage, staging visualization.
@@ -135,6 +135,25 @@ pose:
 
 This performs pose detection and raw tracking, not dance scoring. See
 [the YOLO integration contract](docs/slice-4-yolo.md) for timing, test evidence, and limits.
+
+## Clean tracked trajectories
+
+```powershell
+uv run formsync clean runs/pose-results/poses.json --output runs/clean-results/
+# Or use tracking.json from the synthetic replay workflow:
+uv run formsync clean runs/tracked-demo/tracking.json --output runs/clean-synthetic/
+```
+
+Cleanup filters low-confidence joints, interpolates short internal gaps within each
+raw track, and smooths continuous segments. It saves `trajectories.parquet`,
+`quality.json`, and `cleanup.json` separately from original measurements. Every joint
+sample retains its original confidence plus observed/interpolated/smoothed/missing
+flags. Unassigned detections are excluded and counted; different IDs are never joined.
+
+Use `--pipeline custom.yaml` to configure `pose.keypoint_conf_min`, `max_gap_frames`,
+`smooth_window` (odd), and `smooth_poly` (less than the window). Existing destinations
+are refused. See [the cleanup contract](docs/slice-5-cleanup.md) for output fields,
+quality metrics, numerical tests, and limitations.
 
 ## Development
 
