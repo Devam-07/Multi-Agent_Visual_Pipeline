@@ -28,7 +28,8 @@ formation → agents`, with shared Pydantic models in `schemas/`.
 
 Phase 1 (local CLI: CV core, sync/formation scoring, single feedback agent) is in progress.
 Foundation, ingestion, synthetic pose datasets, replay, ByteTrack tracking, and CPU YOLO pose
-inference with inspection overlays and per-track trajectory cleanup are implemented. Beat extraction,
+inference with inspection overlays, per-track cleanup, and conservative identity reconciliation
+are implemented. Beat extraction,
 scoring, and feedback generation remain upcoming slices.
 Later phases: multi-agent rubric scoring, human-labelled eval harness, FastAPI + React dashboard,
 Kubernetes batch jobs with MinIO/S3 storage, staging visualization.
@@ -154,6 +155,24 @@ Use `--pipeline custom.yaml` to configure `pose.keypoint_conf_min`, `max_gap_fra
 `smooth_window` (odd), and `smooth_poly` (less than the window). Existing destinations
 are refused. See [the cleanup contract](docs/slice-5-cleanup.md) for output fields,
 quality metrics, numerical tests, and limitations.
+
+## Reconcile dancer identities
+
+```powershell
+uv run formsync reconcile runs/pose-results/poses.json --output runs/identities/
+uv run formsync clean runs/identities/identities.json --output runs/clean-with-slots/
+```
+
+Reconciliation also accepts `tracking.json` from synthetic tracking. It joins raw
+track fragments only when time, bidirectional predicted position, body scale, and
+confident joint shape agree, and the match is uniquely plausible in both directions.
+Competing matches remain separate. It writes `slots.parquet` and `identities.json`
+with track-to-slot mapping, link evidence, and source provenance.
+
+Slots are provisional identity estimates, not confirmed dancer names or a guaranteed
+count of people. Cleanup preserves both slot and raw track ID and still filters
+within raw fragment boundaries. Use `--config configs/identity.default.yaml` to tune
+the identity thresholds. See [the identity contract](docs/slice-6-identity.md).
 
 ## Development
 

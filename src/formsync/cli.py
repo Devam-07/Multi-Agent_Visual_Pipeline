@@ -218,7 +218,9 @@ def poses(
 
 @app.command()
 def clean(
-    manifest: Annotated[Path, typer.Argument(help="Successful poses.json or tracking.json.")],
+    manifest: Annotated[
+        Path, typer.Argument(help="Successful poses.json, tracking.json or identities.json.")
+    ],
     output: Annotated[Path, typer.Option(help="New directory for cleaned trajectories.")],
     pipeline: Annotated[
         Path | None, typer.Option(help="Pipeline YAML with cleanup settings.")
@@ -244,6 +246,33 @@ def clean(
         console.print(f"Unable to clean trajectories: {exc}", markup=False)
         raise typer.Exit(code=1) from exc
     console.print(f"Cleanup complete: {result}", markup=False)
+
+
+@app.command("reconcile")
+def reconcile_identities(
+    manifest: Annotated[Path, typer.Argument(help="Successful poses.json or tracking.json.")],
+    output: Annotated[Path, typer.Option(help="New directory for slot assignments and evidence.")],
+    config: Annotated[Path | None, typer.Option(help="Optional identity matching YAML.")] = None,
+) -> None:
+    """Join unambiguous track fragments into provisional dancer slots.
+
+    Competing candidates remain separate. Saved evidence explains accepted, rejected,
+    and ambiguous links. Does not change raw measurements or repair within-track swaps.
+    """
+    from formsync.pose.identity import reconcile_dataset
+    from formsync.schemas.identity import IdentityConfig
+
+    try:
+        settings = (
+            IdentityConfig.model_validate(yaml.safe_load(config.read_text(encoding="utf-8")))
+            if config
+            else IdentityConfig()
+        )
+        result = reconcile_dataset(manifest, output, settings)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        console.print(f"Unable to reconcile identities: {exc}", markup=False)
+        raise typer.Exit(code=1) from exc
+    console.print(f"Identity reconciliation complete: {result}", markup=False)
 
 
 if __name__ == "__main__":  # pragma: no cover

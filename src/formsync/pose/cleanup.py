@@ -89,6 +89,7 @@ def clean_joint(
 TRAJECTORY_SCHEMA = pa.schema(
     [
         ("track_id", pa.int32()),
+        ("slot", pa.int16()),
         ("frame_idx", pa.int32()),
         ("t", pa.float64()),
         ("joint", pa.int8()),
@@ -106,7 +107,7 @@ TRAJECTORY_SCHEMA = pa.schema(
 def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
     """Save separate long-format joint trajectories and quality metrics from tracked artifacts.
 
-    Accepts successful version-1 poses.json or tracking.json. Every track spans its
+    Accepts successful poses.json, tracking.json or identities.json. Every track spans its
     first through last detection; absent intermediate frames are represented as NaN
     samples, but different IDs are never joined. Output has one row per track/frame/
     COCO joint. Raw confidence and processing masks support downstream quality gates.
@@ -117,8 +118,8 @@ def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
     output = output.resolve()
     if output.exists():
         raise FileExistsError(f"Output already exists: {output}")
-    if source.name not in {"poses.json", "tracking.json"}:
-        raise ValueError("Expected poses.json or tracking.json")
+    if source.name not in {"poses.json", "tracking.json", "identities.json"}:
+        raise ValueError("Expected poses.json, tracking.json or identities.json")
     record = json.loads(source.read_text(encoding="utf-8"))
     if (
         not isinstance(record, dict)
@@ -138,7 +139,9 @@ def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
         or not 1 <= n_frames <= 90000
     ):
         raise ValueError("Invalid source timeline")
-    tracks_path = source.parent / "tracks.parquet"
+    tracks_path = source.parent / (
+        "slots.parquet" if source.name == "identities.json" else "tracks.parquet"
+    )
     with tracks_path.open("rb") as file:
         fingerprint = hashlib.file_digest(file, "sha256").hexdigest()
     table = read_keypoints(tracks_path)
@@ -156,11 +159,22 @@ def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
     pairs = np.column_stack((table.track_id[assigned], table.frame_idx[assigned]))
     if len(np.unique(pairs, axis=0)) != len(pairs):
         raise ValueError("Duplicate track/frame observations")
+    if np.any(table.slot < -1) or np.any((table.track_id < 0) & (table.slot >= 0)):
+        raise ValueError("Invalid slot assignment")
+    if source.name == "identities.json" and np.any(table.slot[assigned] < 0):
+        raise ValueError("Reconciled tracks require assigned slots")
+    slotted = table.slot >= 0
+    slot_pairs = np.column_stack((table.slot[slotted], table.frame_idx[slotted]))
+    if len(np.unique(slot_pairs, axis=0)) != len(slot_pairs):
+        raise ValueError("Duplicate slot/frame observations")
     parts = []
     reports: list[dict[str, object]] = []
     total_samples = 0
     for track_id in np.unique(table.track_id[assigned]):
         selected = table.track_id == track_id
+        slots = np.unique(table.slot[selected])
+        if len(slots) != 1 or slots[0] < -1:
+            raise ValueError("Each raw track must have a consistent slot")
         first, last = int(table.frame_idx[selected].min()), int(table.frame_idx[selected].max())
         length = last - first + 1
         total_samples += length * 17
@@ -181,6 +195,7 @@ def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
         indices = np.repeat(np.arange(first, last + 1), 17)
         data = {
             "track_id": np.full(length * 17, track_id),
+            "slot": np.full(length * 17, slots[0]),
             "frame_idx": indices,
             "t": indices / fps,
             "joint": np.tile(np.arange(17), length),
@@ -196,6 +211,7 @@ def clean_dataset(source: Path, output: Path, config: CleanupConfig) -> Path:
         reports.append(
             {
                 "track_id": int(track_id),
+                "slot": int(slots[0]),
                 "first_frame": first,
                 "last_frame": last,
                 "span_frames": length,

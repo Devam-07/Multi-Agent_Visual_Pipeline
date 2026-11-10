@@ -1,0 +1,10 @@
+# Conservative starting thresholds; not calibrated on real dance footage.
+max_gap_s: 2.0
+max_distance_body: 0.75
+max_pose_error: 0.25
+max_size_ratio: 1.5
+confidence: 0.3
+min_common_joints: 6
+min_fragment_frames: 3
+velocity_window: 3
+max_fragments: 2000

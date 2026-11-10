@@ -8,6 +8,8 @@ uv run formsync clean runs/tracked-demo/tracking.json --output runs/clean-synthe
 ```
 
 The command accepts successful version-1 `poses.json` and `tracking.json` results.
+Slice 6 additionally supports `identities.json`/`slots.parquet` and carries a `slot`
+column into the trajectories; processing still respects raw track boundaries.
 It reads the adjacent `tracks.parquet`, validates frame indices/times and uniqueness
 of each assigned track/frame pair, and preserves the source files. Existing output
 directories are refused. CLI errors return code 1.
